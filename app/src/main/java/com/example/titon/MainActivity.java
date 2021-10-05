@@ -4,6 +4,7 @@ import androidx.appcompat.app.AppCompatActivity;
 import androidx.gridlayout.widget.GridLayout;
 
 import android.os.Bundle;
+import android.os.CountDownTimer;
 import android.view.View;
 import android.widget.ArrayAdapter;
 import android.widget.Spinner;
@@ -23,6 +24,7 @@ import java.util.List;
 public class MainActivity extends AppCompatActivity {
 
     Spinner devicesSpinner;
+
     TextView baudRateTextView;
     TextView dataSizeTextView;
     TextView parityTextView;
@@ -30,8 +32,11 @@ public class MainActivity extends AppCompatActivity {
     TextView currentView;
     GridLayout gridLayout;
 
+    CountDownTimer countDownTimer;
+
     List<String> inputDemo = new ArrayList<String>();
     String[] splittedValues;
+    int stepper = 0;
 
     // Elerheto eszkozok listaja
     List<String> deviceList = new ArrayList<String>();
@@ -60,6 +65,7 @@ public class MainActivity extends AppCompatActivity {
         // Fill the inputDemo List
         fillDemoList();
 
+        /*
         for (int i=0; i<inputDemo.size(); i++){
             splitInput(inputDemo.get(i));
             for (int j=0; j<7; j++){
@@ -67,6 +73,28 @@ public class MainActivity extends AppCompatActivity {
                 currentView.setText(splittedValues[j]);
             }
         }
+        */
+
+        countDownTimer = new CountDownTimer(60100, 1000) {
+            @Override
+            public void onTick(long millisUntilFinished) {
+                if (stepper < inputDemo.size()){
+                    splitInput(inputDemo.get(stepper));
+                    for (int j=0; j<7; j++){
+                        currentView = gridLayout.findViewWithTag(Integer.toString(j));
+                        currentView.setText(splittedValues[j]);
+                    }
+                    stepper++;
+                } else {
+                    stepper = 0;
+                }
+            }
+
+            @Override
+            public void onFinish() {
+
+            }
+        };
 
         //findDevice();
         setDropDownList();
@@ -91,6 +119,10 @@ public class MainActivity extends AppCompatActivity {
                 , Toast.LENGTH_LONG).show();
     }
 
+    public void startTimer (View view) {
+        countDownTimer.start();
+    }
+
     public void setDropDownList() {
         deviceList.add("Device 1");
         deviceList.add("Device 2");
@@ -108,6 +140,20 @@ public class MainActivity extends AppCompatActivity {
         inputDemo.add("0C0AE2 050A 1982_FFFFEA 7007E1 702782 70477B");
         inputDemo.add("0C0AD7 050A 1983 70596A_FFFFF2 702783 704754");
         inputDemo.add("0C0AD4 0509 1984 705982 700839_FFFFE8 70478D");
+        inputDemo.add("0C0ACC 050B 1982 705996 700884 7027C9_FFFFE3");
+        inputDemo.add("0C0AD9 050A 1984_FFFFF9 7008A3 7027D5 7047A5");
+        inputDemo.add("0C0ADD 050B 1981 7059E5 7009D6 7028BD_FFFFC8");
+        inputDemo.add("0C0AF7 050A 1983_FFFFEB 7009F7 7028E8 70483A");
+        inputDemo.add("0C0AEB 0509 1982 705A14_FFFFEA 7028D8 704856");
+        inputDemo.add("0C0AFD 050A 1982 7059FE 700A3D_FFFFC4 704873");
+        inputDemo.add("0C0B07 050B 1981 705A29 700A77 702911_FFFFEE");
+        inputDemo.add("0C0B05 050A 1980_FFFFF4 700A98 702943 704881");
+        inputDemo.add("0C0AF1 0508 1982 705A52_FFFFEB 702947 704890");
+        inputDemo.add("0C0AEF 0507 1981 705A6A 700AF7_FFFFF5 704897");
+        inputDemo.add("0C0AFE 0508 1981 705A52 700B17 70297B_FFFFD9");
+        inputDemo.add("0C0B05 050A 1980_FFFFD5 700B30 7029AD 7048E1");
+        inputDemo.add("0C0AFD 0508 1980 705A65_FFFFD3 7029CE 7048D4");
+        inputDemo.add("0C0B07 0507 1980 705A95 700B9A_FFFFE5 7048DC");
     }
 
     public String[] splitInput(String input) {
