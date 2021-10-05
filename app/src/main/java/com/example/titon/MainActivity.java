@@ -1,16 +1,20 @@
 package com.example.titon;
 
 import androidx.appcompat.app.AppCompatActivity;
+import androidx.gridlayout.widget.GridLayout;
 
 import android.os.Bundle;
-import android.util.Log;
 import android.view.View;
 import android.widget.ArrayAdapter;
 import android.widget.Spinner;
+import android.widget.TextView;
+import android.widget.Toast;
+
 
 import com.google.android.things.pio.PeripheralManager;
 import com.google.android.things.pio.UartDevice;
 import com.google.android.things.pio.UartDeviceCallback;
+
 
 import java.io.IOException;
 import java.util.ArrayList;
@@ -19,6 +23,15 @@ import java.util.List;
 public class MainActivity extends AppCompatActivity {
 
     Spinner devicesSpinner;
+    TextView baudRateTextView;
+    TextView dataSizeTextView;
+    TextView parityTextView;
+    TextView stopBitTextView;
+    TextView currentView;
+    GridLayout gridLayout;
+
+    List<String> inputDemo = new ArrayList<String>();
+    String[] splittedValues;
 
     // Elerheto eszkozok listaja
     List<String> deviceList = new ArrayList<String>();
@@ -37,15 +50,26 @@ public class MainActivity extends AppCompatActivity {
         super.onCreate(savedInstanceState);
         setContentView(R.layout.activity_main);
 
-        //findDevice();
-        deviceList.add("Device 1");
-        deviceList.add("Device 2");
+        baudRateTextView = findViewById(R.id.baudRateInput);
+        dataSizeTextView = findViewById(R.id.dataSizeInput);
+        parityTextView = findViewById(R.id.parityInput);
+        stopBitTextView = findViewById(R.id.stopBitInput);
 
-        devicesSpinner = findViewById(R.id.devicesSpinner);
-        ArrayAdapter<String> adapter = new ArrayAdapter<String>(this,
-                android.R.layout.simple_spinner_item, deviceList);
-        adapter.setDropDownViewResource(android.R.layout.simple_spinner_dropdown_item);
-        devicesSpinner.setAdapter(adapter);
+        gridLayout = findViewById(R.id.gridLayout);
+
+        // Fill the inputDemo List
+        fillDemoList();
+
+        for (int i=0; i<inputDemo.size(); i++){
+            splitInput(inputDemo.get(i));
+            for (int j=0; j<7; j++){
+                currentView = gridLayout.findViewWithTag(Integer.toString(j));
+                currentView.setText(splittedValues[j]);
+            }
+        }
+
+        //findDevice();
+        setDropDownList();
 
         // Attempt to access the UART device
         /*
@@ -59,7 +83,36 @@ public class MainActivity extends AppCompatActivity {
     }
 
     public void connectToDevice (View view) {
+        Toast.makeText(getApplicationContext(),
+                "BaudRate: " + baudRateTextView.getText().toString() +
+                " DataSize: " + dataSizeTextView.getText().toString() +
+                " Parity: " + parityTextView.getText().toString() +
+                " StopBit: " + stopBitTextView.getText().toString()
+                , Toast.LENGTH_LONG).show();
+    }
 
+    public void setDropDownList() {
+        deviceList.add("Device 1");
+        deviceList.add("Device 2");
+
+        devicesSpinner = findViewById(R.id.devicesSpinner);
+        ArrayAdapter<String> adapter = new ArrayAdapter<String>(this,
+                android.R.layout.simple_spinner_item, deviceList);
+        adapter.setDropDownViewResource(android.R.layout.simple_spinner_dropdown_item);
+        devicesSpinner.setAdapter(adapter);
+    }
+
+    public void fillDemoList() {
+        inputDemo.add("0C0AD7 050A 1983 70594C 700788_FFFFF6 704739");
+        inputDemo.add("0C0ACB 050A 1982 705946 7007BD 702744_FFFFE3");
+        inputDemo.add("0C0AE2 050A 1982_FFFFEA 7007E1 702782 70477B");
+        inputDemo.add("0C0AD7 050A 1983 70596A_FFFFF2 702783 704754");
+        inputDemo.add("0C0AD4 0509 1984 705982 700839_FFFFE8 70478D");
+    }
+
+    public String[] splitInput(String input) {
+        splittedValues = input.split(" |\\_");
+        return splittedValues;
     }
 
     /*

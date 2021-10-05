@@ -16,6 +16,12 @@ android {
         testInstrumentationRunner "androidx.test.runner.AndroidJUnitRunner"
     }
 
+    allprojects {
+        repositories {
+            maven { url 'https://jitpack.io' }
+        }
+    }
+
     buildTypes {
         release {
             minifyEnabled false
