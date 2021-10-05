@@ -3,8 +3,15 @@ package com.example.titon;
 import androidx.appcompat.app.AppCompatActivity;
 import androidx.gridlayout.widget.GridLayout;
 
+import android.content.BroadcastReceiver;
+import android.content.Context;
+import android.content.Intent;
+import android.hardware.usb.UsbDevice;
+import android.hardware.usb.UsbDeviceConnection;
+import android.hardware.usb.UsbManager;
 import android.os.Bundle;
 import android.os.CountDownTimer;
+import android.text.SpannableStringBuilder;
 import android.view.View;
 import android.widget.ArrayAdapter;
 import android.widget.Spinner;
@@ -16,12 +23,26 @@ import com.google.android.things.pio.PeripheralManager;
 import com.google.android.things.pio.UartDevice;
 import com.google.android.things.pio.UartDeviceCallback;
 
+import com.hoho.android.usbserial.driver.UsbSerialDriver;
+import com.hoho.android.usbserial.driver.UsbSerialPort;
+import com.hoho.android.usbserial.driver.UsbSerialProber;
+//import com.hoho.android.usbserial.util.HexDump;
+
 
 import java.io.IOException;
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.List;
 
 public class MainActivity extends AppCompatActivity {
+
+    private enum UsbPermission { Unknown, Requested, Granted, Denied }
+
+    private static final String INTENT_ACTION_GRANT_USB = BuildConfig.APPLICATION_ID + ".GRANT_USB";
+    private static final int WRITE_WAIT_MILLIS = 2000;
+    private static final int READ_WAIT_MILLIS = 2000;
+
+    private UsbPermission usbPermission = UsbPermission.Unknown;
 
     Spinner devicesSpinner;
 
@@ -29,8 +50,14 @@ public class MainActivity extends AppCompatActivity {
     TextView dataSizeTextView;
     TextView parityTextView;
     TextView stopBitTextView;
-    TextView currentView;
+    TextView portTextView;
+    TextView consoleTextView;
+    TextView commandLineTextView;
     GridLayout gridLayout;
+
+    TextView currentView;
+
+    BroadcastReceiver broadcastReceiver;
 
     CountDownTimer countDownTimer;
 
@@ -39,7 +66,10 @@ public class MainActivity extends AppCompatActivity {
     int stepper = 0;
 
     // Elerheto eszkozok listaja
-    List<String> deviceList = new ArrayList<String>();
+    List<UsbSerialDriver> availableDrivers;
+    List<String> deviceList = new ArrayList<>();
+    UsbManager manager;
+    UsbSerialPort usbSerialPort;
 
     /*
     // PLACEHOLDER! csatlakozashoz hasznalt eszkoz neve
@@ -59,10 +89,13 @@ public class MainActivity extends AppCompatActivity {
         dataSizeTextView = findViewById(R.id.dataSizeInput);
         parityTextView = findViewById(R.id.parityInput);
         stopBitTextView = findViewById(R.id.stopBitInput);
+        devicesSpinner = findViewById(R.id.devicesSpinner);
+        portTextView = findViewById(R.id.portInput);
+        consoleTextView = findViewById(R.id.consoleTextView);
+        commandLineTextView = findViewById(R.id.consoleTextView);
 
         gridLayout = findViewById(R.id.gridLayout);
 
-        // Fill the inputDemo List
         fillDemoList();
 
         /*
@@ -96,8 +129,14 @@ public class MainActivity extends AppCompatActivity {
             }
         };
 
-        //findDevice();
-        setDropDownList();
+        // Find all available drivers from attached devices.
+        manager = (UsbManager) getSystemService(Context.USB_SERVICE);
+        availableDrivers = UsbSerialProber.getDefaultProber().findAllDrivers(manager);
+        if (availableDrivers.isEmpty()) {
+            setFakeDropDownList();
+        } else {
+            setDropDownList();
+        }
 
         // Attempt to access the UART device
         /*
@@ -110,13 +149,84 @@ public class MainActivity extends AppCompatActivity {
         */
     }
 
-    public void connectToDevice (View view) {
+    public void tryConnection (View view) {
         Toast.makeText(getApplicationContext(),
                 "BaudRate: " + baudRateTextView.getText().toString() +
                 " DataSize: " + dataSizeTextView.getText().toString() +
                 " Parity: " + parityTextView.getText().toString() +
-                " StopBit: " + stopBitTextView.getText().toString()
+                " StopBit: " + stopBitTextView.getText().toString() +
+                " Port: " + portTextView.getText().toString()
                 , Toast.LENGTH_LONG).show();
+
+        // Open a connection to the first available driver.
+        try {
+            UsbSerialDriver driver = availableDrivers.get(0);
+            UsbDeviceConnection connection = manager.openDevice(driver.getDevice());
+            if (connection == null) {
+                broadcastReceiver = new BroadcastReceiver() {
+                    @Override
+                    public void onReceive(Context context, Intent intent) {
+                        if(INTENT_ACTION_GRANT_USB.equals(intent.getAction())) {
+                            usbPermission = intent.getBooleanExtra(UsbManager.EXTRA_PERMISSION_GRANTED, false)
+                                    ? UsbPermission.Granted : UsbPermission.Denied;
+                            // Implement a proper connect() with multiple exception handlers;
+                        }
+                    }
+                };
+            }
+
+            usbSerialPort = driver.getPorts().get(Integer.getInteger(portTextView.getText().toString())); // Select port for connection
+            usbSerialPort.open(connection);
+            // CSATlAKOZVA
+            Toast.makeText(this, "CONNECTED!", Toast.LENGTH_SHORT).show();
+
+            // STOPBITS ----- 1: 1, || 2: 2, || 3: 1,5
+            // PARITY ----- 0: None, || 1: Odd, || 2: Even
+            usbSerialPort.setParameters(Integer.getInteger(baudRateTextView.getText().toString()),
+                    Integer.getInteger(dataSizeTextView.getText().toString()),
+                    Integer.getInteger(parityTextView.getText().toString()),
+                    Integer.getInteger(stopBitTextView.getText().toString()));
+
+        } catch (Exception e) {
+            e.printStackTrace();
+        }
+    }
+
+    public void sendCommand(View view) {
+        try {
+            byte[] data = (commandLineTextView.getText().toString() + '\n').getBytes();
+            usbSerialPort.write(data, WRITE_WAIT_MILLIS);
+
+            readCommand();
+        } catch (Exception e) {
+            Toast.makeText(this, e.getMessage(), Toast.LENGTH_LONG).show();
+        }
+    }
+
+    public void readCommand() {
+        try {
+            byte[] buffer = new byte[8192];
+            int len = usbSerialPort.read(buffer, READ_WAIT_MILLIS);
+            receive(Arrays.copyOf(buffer, len));
+        } catch (IOException e) {
+            // when using read with timeout, USB bulkTransfer returns -1 on timeout _and_ errors
+            // like connection loss, so there is typically no exception thrown here on error
+            Toast.makeText(this, "connection lost: " + e.getMessage(), Toast.LENGTH_LONG).show();
+            disconnect();
+        }
+    }
+
+    private void receive(byte[] data) {
+        SpannableStringBuilder spn = new SpannableStringBuilder();
+        spn.append("receive " + data.length + " bytes\n");
+        consoleTextView.append(spn);
+    }
+
+    public void disconnect() {
+        try {
+            usbSerialPort.close();
+        } catch (IOException ignored) {}
+        usbSerialPort = null;
     }
 
     public void startTimer (View view) {
@@ -124,11 +234,17 @@ public class MainActivity extends AppCompatActivity {
     }
 
     public void setDropDownList() {
+        ArrayAdapter<UsbSerialDriver> adapter = new ArrayAdapter<>(getApplicationContext(),
+                android.R.layout.simple_spinner_item, availableDrivers);
+        adapter.setDropDownViewResource(android.R.layout.simple_spinner_dropdown_item);
+        devicesSpinner.setAdapter(adapter);
+    }
+
+    public void setFakeDropDownList() {
         deviceList.add("Device 1");
         deviceList.add("Device 2");
 
-        devicesSpinner = findViewById(R.id.devicesSpinner);
-        ArrayAdapter<String> adapter = new ArrayAdapter<String>(this,
+        ArrayAdapter<String> adapter = new ArrayAdapter<>(getApplicationContext(),
                 android.R.layout.simple_spinner_item, deviceList);
         adapter.setDropDownViewResource(android.R.layout.simple_spinner_dropdown_item);
         devicesSpinner.setAdapter(adapter);
